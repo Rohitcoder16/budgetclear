@@ -1,7 +1,13 @@
+<<<<<<< HEAD
+from modules.reconciliation import reconcile_budget
+from modules.ai_assist import suggest_categories, suggest_anomalies
+import json as json_lib
+=======
 
 import json
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
+>>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
 
 import pandas as pd
 import streamlit as st
@@ -11,6 +17,14 @@ from modules.reconciliation import reconcile_budget
 from modules.duplicate_detection import detect_duplicates
 from modules.ai_assist import suggest_categories, suggest_anomalies
 
+<<<<<<< HEAD
+
+
+# --------------------------------------------------
+# 1. PAGE CONFIGURATION
+# --------------------------------------------------
+=======
+>>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
 
 st.set_page_config(
     page_title="BudgetClear",
@@ -559,16 +573,203 @@ def main():
 
     with category_col:
         stated_category_json = st.text_area(
+<<<<<<< HEAD
+            "Stated Category Totals (JSON)",
+            value=json_lib.dumps(
+                {
+                    "Office Supplies": "2500.00",
+                    "IT Equipment": "21500.00",
+                    "Maintenance": "4000.00",
+                },
+                indent=2,
+            ),
+=======
             "Stated category totals (JSON)",
             value=json.dumps(DEFAULT_CATEGORY_TOTALS, indent=2),
+>>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
             height=150,
             help=(
                 'Example: {"Office Supplies": "2500.00"}'
             ),
         )
 
+<<<<<<< HEAD
+    # --------------------------------------------------
+    # SECTION 5: REVIEW AREAS
+    # --------------------------------------------------
+
+    st.divider()
+    st.header("5. Findings and Review")
+
+    verified_tab, quality_tab, ai_tab, review_tab = st.tabs(
+    [
+        "Verified Findings",
+        "Data Quality & Duplicates",
+        "AI Suggestions",
+        "Human Review",
+    ]
+)
+    # Verified reconciliation results
+    with verified_tab:
+        st.markdown("#### Rule-Based Reconciliation")
+
+        if transactions is None or transactions.empty:
+            st.info("Load transaction data to calculate reconciliation results.")
+        else:
+            try:
+                records = transactions.to_dict(orient="records")
+
+                # Decimal conversion from text avoids float-based money arithmetic.
+                stated_total = st.text_input(
+                    "Stated Grand Total (₹)",
+                    value=str(stated_grand_total),
+                    key="reconciliation_grand_total",
+                )
+
+                stated_categories = st.text_area(
+                    "Stated Category Totals (JSON)",
+                    value=stated_category_json,
+                    key="reconciliation_category_totals",
+                )
+
+                from decimal import Decimal
+
+                category_totals = json_lib.loads(stated_categories)
+
+                findings = reconcile_budget(
+                    records,
+                    Decimal(stated_total),
+                    {
+                        name: Decimal(str(amount))
+                        for name, amount in category_totals.items()
+                    },
+                )
+
+                st.success("Reconciliation completed.")
+
+                st.dataframe(findings, use_container_width=True)
+
+            except (
+                ValueError,
+                TypeError,
+                ArithmeticError,
+                json_lib.JSONDecodeError,
+            ) as exc:
+                st.error(f"Unable to reconcile budget: {exc}")
+
+
+    # Data quality
+    with quality_tab:
+        st.markdown("#### Data Quality Checks")
+
+        missing_rows = transactions[
+            missing_category_mask
+        ]
+
+        if missing_rows.empty:
+            st.success("No missing categories found.")
+        else:
+            st.warning(
+                f"{len(missing_rows)} transaction(s) have no category."
+            )
+
+            st.dataframe(
+                missing_rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                "Missing categories are not automatically filled."
+            )
+
+        st.divider()
+
+        st.markdown("#### Duplicate Detection")
+
+        st.info(
+            "Duplicate detection will be connected to "
+            "modules/duplicate_detection.py."
+        )
+
+
+   
+# AI suggestions
+    with ai_tab:
+     st.markdown("#### AI-Assisted Review")
+
+    if st.session_state.transactions is None:
+        st.info("Load demo data or upload a CSV file to see AI suggestions.")
+    else:
+        try:
+            # Convert the current transaction DataFrame into records.
+            ai_transactions = (
+                st.session_state.transactions
+                .fillna("")
+                .to_dict(orient="records")
+            )
+
+            category_suggestions = suggest_categories(ai_transactions)
+            anomaly_suggestions = suggest_anomalies(ai_transactions)
+
+            st.caption(
+                "AI outputs are suggestions for human review, "
+                "not verified findings."
+            )
+
+            st.markdown("##### Category Suggestions")
+            if category_suggestions:
+                st.dataframe(
+                    pd.DataFrame(category_suggestions),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.success("No category suggestions to review.")
+
+            st.markdown("##### Unusual Transaction Suggestions")
+            if anomaly_suggestions:
+                st.dataframe(
+                    pd.DataFrame(anomaly_suggestions),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.success("No unusual transaction suggestions to review.")
+
+        except Exception as exc:
+            st.error(f"Could not generate AI suggestions: {exc}")
+
+
+    # Human review
+    with review_tab:
+        st.markdown("#### Suggestion Review Queue")
+
+        st.info(
+            "Accept and Reject controls will be added when the AI "
+            "suggestion module is connected."
+        )
+
+        st.caption(
+            "Accepted suggestions will affect a working copy only. "
+            "The original uploaded records will remain unchanged."
+        )
+
+    # --------------------------------------------------
+    # SECTION 6: EXPORT
+    # --------------------------------------------------
+
+    st.divider()
+    st.header("6. Export Report")
+
+    try:
+        stated_category_totals = json_lib.loads(
+            stated_category_json
+        )
+=======
     try:
         stated_category_totals = json.loads(stated_category_json)
+>>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
 
         if not isinstance(stated_category_totals, dict):
             raise ValueError("Category totals must be a JSON object.")
@@ -989,6 +1190,14 @@ def main():
 
     with export2:
         st.download_button(
+<<<<<<< HEAD
+            label="Download Starter JSON Report",
+            data=json_lib.dumps(
+                report,
+                indent=2,
+                ensure_ascii=False,
+            ).encode("utf-8"),
+=======
             "Download reviewed CSV",
             data=reviewed_csv,
             file_name="budgetclear_reviewed_transactions.csv",
@@ -1000,6 +1209,7 @@ def main():
         st.download_button(
             "Download analysis JSON",
             data=report_json,
+>>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
             file_name="budgetclear_report.json",
             mime="application/json",
             disabled=json_error is not None,
