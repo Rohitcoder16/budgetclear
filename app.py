@@ -2,6 +2,7 @@
 import json
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -17,6 +18,14 @@ st.set_page_config(
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# Load the external dashboard theme.
+st.markdown(
+    "<style>\n"
+    + Path("assets/dashboard.css").read_text(encoding="utf-8")
+    + "\n</style>",
+    unsafe_allow_html=True,
 )
 
 DISCLAIMER = (
@@ -130,7 +139,6 @@ st.markdown(
     div[data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 12px;
     }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -482,41 +490,19 @@ def main():
 
     metric1, metric2, metric3 = st.columns(3)
 
-    metric1.metric(
-        "Total transactions",
-        f"{len(original_df):,}",
-    )
-
+    metric1.metric("Total transactions", f"{len(original_df):,}")
     metric2.metric(
         "Recorded amount total",
         format_inr(recorded_total),
-        help=(
-            "Sum of parseable transaction amounts. "
-            "Invalid amounts are excluded."
-        ),
+        help="Sum of parseable transaction amounts. Invalid amounts are excluded.",
     )
-
-    metric3.metric(
-        "Validation errors",
-        f"{len(validation_errors):,}",
-    )
+    metric3.metric("Validation errors", f"{len(validation_errors):,}")
 
     metric4, metric5, metric6 = st.columns(3)
 
-    metric4.metric(
-        "Missing categories",
-        f"{missing_categories:,}",
-    )
-
-    metric5.metric(
-        "Missing amounts",
-        f"{missing_amounts:,}",
-    )
-
-    metric6.metric(
-        "Validation warnings",
-        f"{len(validation_warnings):,}",
-    )
+    metric4.metric("Missing categories", f"{missing_categories:,}")
+    metric5.metric("Missing amounts", f"{missing_amounts:,}")
+    metric6.metric("Validation warnings", f"{len(validation_warnings):,}")
 
     if invalid_amount_count:
         st.warning(
@@ -529,6 +515,116 @@ def main():
         f"of {len(normalized_records)} transaction(s)."
     )
 
+    # ----------------------------------------------
+    # Spending analytics
+    # ----------------------------------------------
+
+    st.subheader("Spending analytics")
+    st.caption(
+        "Explore recorded spending by category and date. "
+        "Transactions with invalid amounts are excluded."
+    )
+
+    category_totals_for_chart = {}
+    daily_totals_for_chart = {}
+
+    for record in normalized_records:
+        amount = safe_amount(record.get("amount"))
+        if amount is None:
+            continue
+
+        category = str(record.get("category") or "").strip()
+        if not category:
+            category = "Uncategorized"
+
+        category_totals_for_chart[category] = (
+            category_totals_for_chart.get(category, Decimal("0.00"))
+            + amount
+        )
+
+        date_text = str(record.get("date") or "").strip()
+        if date_text:
+            parsed_date = pd.to_datetime(date_text, errors="coerce")
+            if not pd.isna(parsed_date):
+                date_key = parsed_date.strftime("%Y-%m-%d")
+                daily_totals_for_chart[date_key] = (
+                    daily_totals_for_chart.get(date_key, Decimal("0.00"))
+                    + amount
+                )
+
+    chart_col1, chart_col2 = st.columns(2, gap="large")
+
+    with chart_col1:
+        with st.container(border=True):
+            st.markdown("#### Spending by category")
+            st.caption("Recorded amount · INR")
+
+            if category_totals_for_chart:
+                category_chart = pd.DataFrame([
+                    {
+                        "Category": category,
+                        "Amount (₹)": float(amount),
+                    }
+                    for category, amount in sorted(
+                        category_totals_for_chart.items(),
+                        key=lambda item: item[1],
+                    )
+                ])
+
+                st.bar_chart(
+                    category_chart,
+                    x="Amount (₹)",
+                    y="Category",
+                    horizontal=True,
+                    height=max(260, 58 * len(category_chart)),
+                    width="stretch",
+                    x_label="Amount (₹)",
+                    y_label="",
+                )
+
+                st.caption(
+                    f"{len(category_chart)} categories · "
+                    f"{format_inr(sum(category_totals_for_chart.values(), Decimal('0.00')))} total"
+                )
+            else:
+                st.info("No valid amounts are available for this chart.")
+
+    with chart_col2:
+        with st.container(border=True):
+            st.markdown("#### Spending over time")
+            st.caption("Daily recorded amount · INR")
+
+            if daily_totals_for_chart:
+                daily_chart = pd.DataFrame([
+                    {
+                        "Date": pd.to_datetime(date),
+                        "Amount (₹)": float(amount),
+                    }
+                    for date, amount in sorted(daily_totals_for_chart.items())
+                ])
+
+                st.line_chart(
+                    daily_chart,
+                    x="Date",
+                    y="Amount (₹)",
+                    height=340,
+                    width="stretch",
+                    x_label="Transaction date",
+                    y_label="Amount (₹)",
+                )
+
+                st.caption(
+                    f"{len(daily_chart)} dates · "
+                    f"{format_inr(sum(daily_totals_for_chart.values(), Decimal('0.00')))} total"
+                )
+            else:
+                st.info("No valid dated amounts are available for the trend chart.")
+
+    st.caption(
+        "Charts are summaries, not proof of wrongdoing, and do not replace "
+        "the verified reconciliation findings."
+    )
+
     with st.expander("Preview original transactions"):
         st.dataframe(
             original_df,
@@ -537,7 +633,7 @@ def main():
         )
 
     # ----------------------------------------------
-    # 4. Declared budget totals
+    # 4. Declared budget totals — separate fields
     # ----------------------------------------------
 
     st.divider()
@@ -548,48 +644,69 @@ def main():
         "The demo defaults are examples, not authoritative figures."
     )
 
-    total_col, category_col = st.columns(2)
+    total_col, categories_col = st.columns([1, 1.5], gap="large")
 
     with total_col:
         stated_grand_total = st.text_input(
             "Stated grand total (₹)",
             value="29500.00",
+            key="grand_total",
             help="Enter the grand total declared in the source budget.",
         )
 
-    with category_col:
-        stated_category_json = st.text_area(
-            "Stated category totals (JSON)",
-            value=json.dumps(DEFAULT_CATEGORY_TOTALS, indent=2),
-            height=150,
-            help=(
-                'Example: {"Office Supplies": "2500.00"}'
-            ),
+    with categories_col:
+        st.markdown("#### Declared category totals")
+        st.caption(
+            "Enter each amount from the budget document. "
+            "You do not need to edit JSON."
         )
 
-    try:
-        stated_category_totals = json.loads(stated_category_json)
-
-        if not isinstance(stated_category_totals, dict):
-            raise ValueError("Category totals must be a JSON object.")
-
-        json_error = None
-
-    except (json.JSONDecodeError, ValueError) as error:
         stated_category_totals = {}
-        json_error = str(error)
+        category_columns = st.columns(2, gap="medium")
 
-    if json_error:
-        st.error(f"Invalid category totals JSON: {json_error}")
+        for index, (category, default_amount) in enumerate(
+            DEFAULT_CATEGORY_TOTALS.items()
+        ):
+            with category_columns[index % 2]:
+                stated_category_totals[category] = st.text_input(
+                    f"{category} (₹)",
+                    value=default_amount,
+                    key=f"budget_category_{category}",
+                    help=f"Declared budget amount for {category}.",
+                )
+
+        with st.expander("Add another budget category"):
+            extra_category_name = st.text_input(
+                "Category name",
+                key="extra_budget_category_name",
+                placeholder="e.g. Transport",
+            )
+            extra_category_amount = st.text_input(
+                "Category amount (₹)",
+                value="0.00",
+                key="extra_budget_category_amount",
+                help="Enter the declared amount for this additional category.",
+            )
+
+            if extra_category_name.strip():
+                if extra_category_name.strip() in stated_category_totals:
+                    st.warning(
+                        "That category already exists. "
+                        "Edit its existing amount instead."
+                    )
+                else:
+                    stated_category_totals[extra_category_name.strip()] = (
+                        extra_category_amount
+                    )
+
+    # JSON is used for the downloadable report, not as a user input.
+    json_error = None
 
     # ----------------------------------------------
     # 5. Run analysis modules
     # ----------------------------------------------
 
     try:
-        if json_error:
-            raise ValueError(json_error)
-
         verified_findings = reconcile_budget(
             normalized_records,
             stated_grand_total,
@@ -664,10 +781,7 @@ def main():
     with verified_tab:
         st.subheader("Rule-based reconciliation")
 
-        show_module_error(
-            "Reconciliation failed",
-            reconciliation_error,
-        )
+        show_module_error("Reconciliation failed", reconciliation_error)
 
         if not reconciliation_error:
             if verified_findings:
@@ -709,10 +823,7 @@ def main():
         st.divider()
         st.subheader("Potential duplicates")
 
-        show_module_error(
-            "Duplicate detection failed",
-            duplicate_error,
-        )
+        show_module_error("Duplicate detection failed", duplicate_error)
 
         if not duplicate_error:
             if duplicate_findings:
@@ -749,10 +860,7 @@ def main():
     with ai_tab:
         st.subheader("Category suggestions")
 
-        show_module_error(
-            "Category suggestions failed",
-            category_error,
-        )
+        show_module_error("Category suggestions failed", category_error)
 
         if not category_error:
             display_findings(
@@ -763,10 +871,7 @@ def main():
         st.divider()
         st.subheader("Potential anomalies")
 
-        show_module_error(
-            "Anomaly analysis failed",
-            anomaly_error,
-        )
+        show_module_error("Anomaly analysis failed", anomaly_error)
 
         if not anomaly_error:
             display_findings(
@@ -829,8 +934,7 @@ def main():
                     if confidence is not None:
                         try:
                             st.caption(
-                                f"Suggestion confidence: "
-                                f"{float(confidence):.0%}"
+                                f"Suggestion confidence: {float(confidence):.0%}"
                             )
                         except (TypeError, ValueError):
                             pass
@@ -883,7 +987,6 @@ def main():
                 use_container_width=True,
                 hide_index=True,
             )
-
         else:
             st.caption("No review decisions recorded.")
 
@@ -1002,7 +1105,6 @@ def main():
             data=report_json,
             file_name="budgetclear_report.json",
             mime="application/json",
-            disabled=json_error is not None,
             use_container_width=True,
         )
 
