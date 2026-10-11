@@ -61,3 +61,10 @@ def test_input_is_not_changed():
     before = copy.deepcopy(data)
     reconcile_budget(data, "170.00", {"Equipment": "150.00"})
     assert data == before
+
+
+# Test 8: a blank category that pandas turns into NaN is still treated as missing
+def test_nan_category_is_treated_as_missing():
+    data = rows() + [{"transaction_id": "TXN-004", "category": float("nan"), "amount": "20.00"}]
+    result = reconcile_budget(data, "200.00", {"Equipment": "150.00"})
+    assert types(result) == ["uncategorized_rows"]

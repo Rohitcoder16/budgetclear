@@ -67,6 +67,7 @@ def reconcile_budget(transactions, stated_grand_total, stated_category_totals):
             next(ids), "invalid_budget_total", "Invalid stated grand total",
             "high", "The stated grand total is missing or invalid.", []))
     else:
+        # Sign rule: difference = calculated total minus stated total
         difference = calculated_total - stated_total
         if difference != 0:
             findings.append(make_finding(
@@ -81,7 +82,11 @@ def reconcile_budget(transactions, stated_grand_total, stated_category_totals):
     uncategorized = []
 
     for transaction, amount in valid_rows:
-        category = str(transaction.get("category") or "").strip()
+        raw = transaction.get("category")
+        category = "" if raw is None else str(raw).strip()
+        if category.casefold() in ("nan", "none", "null"):
+            category = ""
+
         if category:
             by_category.setdefault(category.casefold(), []).append(
                 (transaction.get("transaction_id"), amount))
