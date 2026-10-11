@@ -1,0 +1,319 @@
+/* =====================================================
+   BUDGETCLEAR — MIDNIGHT FINANCE
+   Professional dark dashboard
+   ===================================================== */
+
+:root {
+    --bg: #0B1220;
+    --sidebar: #0E1726;
+    --panel: #151F30;
+    --panel-hover: #1B2940;
+    --border: #2A3950;
+    --text: #E6EDF7;
+    --muted: #A6B5CA;
+    --blue: #60A5FA;
+    --blue-hover: #3B82F6;
+    --green: #34D399;
+    --amber: #FBBF24;
+    --red: #F87171;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+}
+
+/* Application background */
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+}
+
+[data-testid="stHeader"] {
+    background: rgba(11, 18, 32, 0.96) !important;
+}
+
+.block-container {
+    max-width: 1480px;
+    padding-top: 1.6rem;
+    padding-bottom: 3rem;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: var(--sidebar) !important;
+    border-right: 1px solid var(--border);
+}
+
+[data-testid="stSidebar"] * {
+    color: var(--text);
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+    color: var(--muted) !important;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text) !important;
+    letter-spacing: -0.02em;
+}
+
+p, li, label {
+    color: var(--text);
+}
+
+[data-testid="stMarkdownContainer"] {
+    color: var(--text);
+}
+
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p {
+    color: var(--muted) !important;
+}
+
+/* Subtle entrance animation */
+@keyframes bc-enter {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+[data-testid="stMainBlockContainer"] {
+    animation: bc-enter 0.35s ease-out both;
+}
+
+/* Hero */
+.hero {
+    padding: 2rem 2.1rem;
+    margin: 0.25rem 0 1.3rem;
+    border: 1px solid #344967;
+    border-radius: 16px;
+    background: linear-gradient(115deg, #17263D, #153B43);
+    box-shadow: var(--shadow);
+}
+
+.hero h1 {
+    color: #FFFFFF !important;
+    font-size: 2.2rem;
+    font-weight: 750;
+    margin: 0 0 0.45rem;
+}
+
+.hero p {
+    color: #D5E4F5 !important;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* KPI cards */
+div[data-testid="stMetric"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 13px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+div[data-testid="stMetric"]:hover {
+    border-color: #47678F !important;
+    transform: translateY(-2px);
+}
+
+div[data-testid="stMetricLabel"],
+div[data-testid="stMetricLabel"] * {
+    color: var(--muted) !important;
+    font-weight: 600;
+}
+
+div[data-testid="stMetricValue"],
+div[data-testid="stMetricValue"] * {
+    color: var(--text) !important;
+    font-weight: 750;
+}
+
+/* Bordered panels and chart cards */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 13px;
+    box-shadow: var(--shadow);
+}
+
+/* Tabs */
+[data-testid="stTabs"] [role="tablist"] {
+    gap: 0.35rem;
+    border-bottom: 1px solid var(--border);
+}
+
+[data-testid="stTabs"] button {
+    color: var(--muted) !important;
+    font-weight: 600;
+    transition: color 0.18s ease;
+}
+
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: var(--blue) !important;
+}
+
+/* All buttons — readable by default */
+div.stButton > button,
+div.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] button {
+    min-height: 2.6rem;
+    border-radius: 9px;
+    font-weight: 650;
+    background: #202D42 !important;
+    color: var(--text) !important;
+    border: 1px solid #42536D !important;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease,
+        box-shadow 0.18s ease;
+}
+
+/* Hover state */
+div.stButton > button:hover,
+div.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] button:hover {
+    background: #293A54 !important;
+    border-color: var(--blue) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 3px 12px rgba(96, 165, 250, 0.12);
+    transform: translateY(-1px);
+}
+
+/* Primary action buttons */
+div.stButton > button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] {
+    background: #2563EB !important;
+    color: #FFFFFF !important;
+    border: 1px solid #60A5FA !important;
+}
+
+/* Primary hover */
+div.stButton > button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
+    background: #1D4ED8 !important;
+    color: #FFFFFF !important;
+}
+
+/* Disabled buttons remain legible */
+div.stButton > button:disabled,
+div.stDownloadButton > button:disabled,
+[data-testid="stFormSubmitButton"] button:disabled {
+    background: #263247 !important;
+    color: #A6B5CA !important;
+    border: 1px solid #3A4B64 !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+/* Inputs */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input {
+    background: #0E1726 !important;
+    color: var(--text) !important;
+    border: 1px solid #42536D !important;
+    border-radius: 9px;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    background: #0E1726 !important;
+    color: var(--text) !important;
+    border-color: #42536D !important;
+}
+
+/* CSV upload */
+[data-testid="stFileUploader"] {
+    background: var(--panel) !important;
+    border: 1px dashed #526A89 !important;
+    border-radius: 12px;
+    padding: 0.65rem;
+}
+
+[data-testid="stFileUploader"] section {
+    background: transparent !important;
+}
+
+[data-testid="stFileUploader"] * {
+    color: var(--text);
+}
+
+/* Data tables */
+[data-testid="stDataFrame"],
+[data-testid="stTable"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Alerts */
+[data-testid="stAlert"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+[data-testid="stAlert"] p {
+    color: var(--text) !important;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 11px;
+}
+
+[data-testid="stExpander"] summary {
+    color: var(--text) !important;
+}
+
+/* Separators and progress */
+hr {
+    border-color: var(--border) !important;
+}
+
+[data-testid="stProgressBar"] > div > div {
+    background: var(--blue) !important;
+}
+
+/* Footer */
+footer {
+    visibility: hidden;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .block-container {
+        padding: 1rem 1rem 2rem;
+    }
+
+    .hero {
+        padding: 1.35rem;
+    }
+
+    .hero h1 {
+        font-size: 1.8rem;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}

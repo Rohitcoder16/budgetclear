@@ -1,13 +1,8 @@
-<<<<<<< HEAD
-from modules.reconciliation import reconcile_budget
-from modules.ai_assist import suggest_categories, suggest_anomalies
-import json as json_lib
-=======
+
 
 import json
 from copy import deepcopy
 from decimal import Decimal, InvalidOperation
->>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
 
 import pandas as pd
 import streamlit as st
@@ -17,14 +12,10 @@ from modules.reconciliation import reconcile_budget
 from modules.duplicate_detection import detect_duplicates
 from modules.ai_assist import suggest_categories, suggest_anomalies
 
-<<<<<<< HEAD
-
 
 # --------------------------------------------------
-# 1. PAGE CONFIGURATION
+# PAGE CONFIGURATION
 # --------------------------------------------------
-=======
->>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
 
 st.set_page_config(
     page_title="BudgetClear",
@@ -89,7 +80,7 @@ DEFAULT_CATEGORY_TOTALS = {
 
 
 # --------------------------------------------------
-# Styling
+# STYLING
 # --------------------------------------------------
 
 st.markdown(
@@ -97,16 +88,15 @@ st.markdown(
     <style>
     .block-container {
         padding-top: 1.5rem;
-        padding-bottom: 2rem;
         max-width: 1450px;
     }
 
     [data-testid="stSidebar"] {
-        border-right: 1px solid rgba(120, 130, 150, 0.2);
+        border-right: 1px solid rgba(120,130,150,.2);
     }
 
     .hero {
-        padding: 1.7rem;
+        padding: 1.5rem;
         border-radius: 16px;
         color: white;
         background: linear-gradient(
@@ -117,19 +107,17 @@ st.markdown(
 
     .hero h1 {
         color: white;
-        margin: 0 0 0.4rem 0;
-        font-size: 2.2rem;
+        margin: 0 0 .4rem 0;
     }
 
     .hero p {
         color: #e0eaf3;
         margin: 0;
-        font-size: 1rem;
     }
 
     div[data-testid="stMetric"] {
         background: var(--secondary-background-color);
-        border: 1px solid rgba(120, 130, 150, 0.2);
+        border: 1px solid rgba(120,130,150,.2);
         padding: 1rem;
         border-radius: 12px;
     }
@@ -140,11 +128,6 @@ st.markdown(
         min-height: 2.5rem;
         font-weight: 600;
     }
-
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 12px;
-    }
-
     </style>
     """,
     unsafe_allow_html=True,
@@ -152,7 +135,7 @@ st.markdown(
 
 
 # --------------------------------------------------
-# State and data helpers
+# SESSION STATE
 # --------------------------------------------------
 
 def initialise_state():
@@ -175,7 +158,13 @@ def load_sample():
     st.session_state.review_decisions = {}
 
 
+# --------------------------------------------------
+# CSV LOADING
+# --------------------------------------------------
+
 def prepare_uploaded_csv(uploaded_file):
+    """Load standard transaction CSV files."""
+
     frame = pd.read_csv(
         uploaded_file,
         dtype=str,
@@ -183,9 +172,25 @@ def prepare_uploaded_csv(uploaded_file):
     )
 
     frame.columns = [
-        str(column).strip().lower().replace(" ", "_")
+        str(column)
+        .strip()
+        .lstrip("\ufeff")
+        .lower()
+        .replace(" ", "_")
         for column in frame.columns
     ]
+
+    frame = frame.drop(
+        columns=[
+            column
+            for column in frame.columns
+            if column.startswith("unnamed:")
+        ],
+        errors="ignore",
+    )
+
+    if frame.empty:
+        raise ValueError("The CSV contains no data rows.")
 
     required = [
         "date",
@@ -202,69 +207,33 @@ def prepare_uploaded_csv(uploaded_file):
 
     if missing:
         raise ValueError(
-            "Missing required CSV columns: "
+            "Missing required transaction columns: "
             + ", ".join(missing)
+            + ". This upload handler expects a standard transaction CSV."
         )
-
-    if frame.empty:
-        raise ValueError("The CSV contains no transaction rows.")
 
     if "transaction_id" not in frame.columns:
         frame.insert(
             0,
             "transaction_id",
-            [f"TXN-{i:03d}" for i in range(1, len(frame) + 1)],
+            [
+                f"TXN-{i:06d}"
+                for i in range(1, len(frame) + 1)
+            ],
         )
+
+    frame["amount_unit"] = "INR"
+    frame["dataset_type"] = "transactions"
 
     return frame
 
 
-def safe_amount(value):
-    """Return a Decimal for valid amounts, otherwise None."""
-    if value is None:
-        return None
-
-    text = str(value).strip()
-
-    if not text:
-        return None
-
-    try:
-        amount = Decimal(text)
-        if not amount.is_finite():
-            return None
-        return amount
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def format_inr(amount):
-    """Format an amount as INR without using float arithmetic."""
-    return f"₹{amount:,.2f}"
-
-
-def calculate_amount_total(records):
-    """Sum parseable amounts. Invalid values are excluded."""
-    total = Decimal("0.00")
-    valid_count = 0
-    invalid_count = 0
-
-    for row in records:
-        amount = safe_amount(row.get("amount"))
-
-        if amount is None:
-            invalid_count += 1
-            continue
-
-        total += amount
-        valid_count += 1
-
-    return total, valid_count, invalid_count
-
+# --------------------------------------------------
+# DISPLAY FINDINGS
+# --------------------------------------------------
 
 def display_findings(records, empty_message):
-    """Render findings as readable cards."""
-    if not records:
+    if records is None or len(records) == 0:
         st.info(empty_message)
         return
 
@@ -288,15 +257,8 @@ def display_findings(records, empty_message):
         )
 
         severity = str(
-            item.get("severity", "review")
+            item.get("severity", "Review")
         ).replace("_", " ").title()
-
-        source = item.get("source", "Analysis module")
-
-        evidence = (
-            item.get("evidence_transaction_ids")
-            or item.get("evidence_ids")
-        )
 
         with st.container(border=True):
             left, right = st.columns([5, 1])
@@ -312,35 +274,24 @@ def display_findings(records, empty_message):
                         f"Transaction: {item['transaction_id']}"
                     )
 
+                evidence = (
+                    item.get("evidence_transaction_ids")
+                    or item.get("evidence_ids")
+                )
+
                 if evidence:
                     st.caption(
                         "Related transactions: "
                         + ", ".join(str(value) for value in evidence)
                     )
 
-                difference = item.get("amount_difference")
-                if difference is not None:
-                    parsed_difference = safe_amount(difference)
-                    if parsed_difference is not None:
-                        st.caption(
-                            "Amount difference: "
-                            + format_inr(parsed_difference)
-                        )
-
             with right:
                 st.caption("Severity")
                 st.markdown(f"**{severity}**")
 
-            st.caption(f"Source: {source}")
-
-
-def show_module_error(label, error):
-    if error:
-        st.error(f"{label}: {error}")
-
 
 # --------------------------------------------------
-# Main dashboard
+# MAIN APPLICATION
 # --------------------------------------------------
 
 def main():
@@ -365,7 +316,9 @@ def main():
         st.caption("06 · Export report")
 
         st.divider()
-        st.caption("Fictional data recommended for demonstrations.")
+        st.caption(
+            "Fictional data recommended for demonstrations."
+        )
 
     # Hero
     st.markdown(
@@ -380,9 +333,9 @@ def main():
 
     st.warning(DISCLAIMER)
 
-    # ----------------------------------------------
-    # 1. Load data
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 1. LOAD RECORDS
+    # --------------------------------------------------
 
     st.header("1. Load spending records")
 
@@ -393,8 +346,8 @@ def main():
             "Upload transaction CSV",
             type=["csv"],
             help=(
-                "Required columns: date, description, category, "
-                "amount and reference. Transaction ID is optional."
+                "Required columns: date, description, "
+                "category, amount and reference."
             ),
         )
 
@@ -408,7 +361,10 @@ def main():
             else:
                 try:
                     uploaded_file.seek(0)
-                    loaded_frame = prepare_uploaded_csv(uploaded_file)
+
+                    loaded_frame = prepare_uploaded_csv(
+                        uploaded_file
+                    )
 
                     st.session_state.transactions = loaded_frame
                     st.session_state.input_source = uploaded_file.name
@@ -421,7 +377,8 @@ def main():
                     st.error(f"Could not load CSV: {error}")
 
     with demo_col:
-        st.write("Try the application using fictional transaction records.")
+        st.write("Use fictional records to try the dashboard.")
+
         st.button(
             "Load demo data",
             on_click=load_sample,
@@ -431,9 +388,12 @@ def main():
     transactions = st.session_state.transactions
 
     if transactions is None:
-        st.info("Upload a CSV or load demo data to begin.")
+        st.info(
+            "Upload a transaction CSV or click Load demo data to begin."
+        )
         st.stop()
 
+    # Preserve original records
     original_df = transactions.copy(deep=True)
 
     original_records = (
@@ -442,9 +402,9 @@ def main():
         .to_dict("records")
     )
 
-    # ----------------------------------------------
-    # 2. Validation
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 2. VALIDATION
+    # --------------------------------------------------
 
     try:
         validation = validate_transactions(original_records)
@@ -482,66 +442,20 @@ def main():
         .sum()
     )
 
-    recorded_total, valid_amount_count, invalid_amount_count = (
-        calculate_amount_total(normalized_records)
-    )
-
-    # ----------------------------------------------
-    # 3. Dashboard overview
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 3. DASHBOARD OVERVIEW
+    # --------------------------------------------------
 
     st.divider()
     st.header("2. Dashboard overview")
-    st.caption(f"Input source: {st.session_state.input_source}")
+    st.caption(f"Source: {st.session_state.input_source}")
 
-    metric1, metric2, metric3 = st.columns(3)
+    m1, m2, m3, m4 = st.columns(4)
 
-    metric1.metric(
-        "Total transactions",
-        f"{len(original_df):,}",
-    )
-
-    metric2.metric(
-        "Recorded amount total",
-        format_inr(recorded_total),
-        help=(
-            "Sum of parseable transaction amounts. "
-            "Invalid amounts are excluded."
-        ),
-    )
-
-    metric3.metric(
-        "Validation errors",
-        f"{len(validation_errors):,}",
-    )
-
-    metric4, metric5, metric6 = st.columns(3)
-
-    metric4.metric(
-        "Missing categories",
-        f"{missing_categories:,}",
-    )
-
-    metric5.metric(
-        "Missing amounts",
-        f"{missing_amounts:,}",
-    )
-
-    metric6.metric(
-        "Validation warnings",
-        f"{len(validation_warnings):,}",
-    )
-
-    if invalid_amount_count:
-        st.warning(
-            f"{invalid_amount_count} transaction amount(s) could not "
-            "be parsed and were excluded from the recorded amount total."
-        )
-
-    st.caption(
-        f"Amounts counted in the total: {valid_amount_count} "
-        f"of {len(normalized_records)} transaction(s)."
-    )
+    m1.metric("Transactions", len(original_df))
+    m2.metric("Missing categories", missing_categories)
+    m3.metric("Missing amounts", missing_amounts)
+    m4.metric("Validation issues", len(validation_errors))
 
     with st.expander("Preview original transactions"):
         st.dataframe(
@@ -550,16 +464,17 @@ def main():
             hide_index=True,
         )
 
-    # ----------------------------------------------
-    # 4. Declared budget totals
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 4. DECLARED BUDGET TOTALS
+    # JSON TEXT INPUT REMOVED
+    # --------------------------------------------------
 
     st.divider()
     st.header("3. Declared budget totals")
 
     st.caption(
-        "Enter the totals stated in the budget document. "
-        "The demo defaults are examples, not authoritative figures."
+        "Enter the amounts stated in the budget document. "
+        "These example values are not authoritative figures."
     )
 
     total_col, category_col = st.columns(2)
@@ -568,239 +483,81 @@ def main():
         stated_grand_total = st.text_input(
             "Stated grand total (₹)",
             value="29500.00",
-            help="Enter the grand total declared in the source budget.",
+            key="stated_grand_total_input",
         )
 
     with category_col:
-        stated_category_json = st.text_area(
-<<<<<<< HEAD
-            "Stated Category Totals (JSON)",
-            value=json_lib.dumps(
-                {
-                    "Office Supplies": "2500.00",
-                    "IT Equipment": "21500.00",
-                    "Maintenance": "4000.00",
-                },
-                indent=2,
-            ),
-=======
-            "Stated category totals (JSON)",
-            value=json.dumps(DEFAULT_CATEGORY_TOTALS, indent=2),
->>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
-            height=150,
-            help=(
-                'Example: {"Office Supplies": "2500.00"}'
-            ),
-        )
+        st.markdown("#### Declared category totals")
 
-<<<<<<< HEAD
-    # --------------------------------------------------
-    # SECTION 5: REVIEW AREAS
-    # --------------------------------------------------
-
-    st.divider()
-    st.header("5. Findings and Review")
-
-    verified_tab, quality_tab, ai_tab, review_tab = st.tabs(
-    [
-        "Verified Findings",
-        "Data Quality & Duplicates",
-        "AI Suggestions",
-        "Human Review",
-    ]
-)
-    # Verified reconciliation results
-    with verified_tab:
-        st.markdown("#### Rule-Based Reconciliation")
-
-        if transactions is None or transactions.empty:
-            st.info("Load transaction data to calculate reconciliation results.")
-        else:
-            try:
-                records = transactions.to_dict(orient="records")
-
-                # Decimal conversion from text avoids float-based money arithmetic.
-                stated_total = st.text_input(
-                    "Stated Grand Total (₹)",
-                    value=str(stated_grand_total),
-                    key="reconciliation_grand_total",
-                )
-
-                stated_categories = st.text_area(
-                    "Stated Category Totals (JSON)",
-                    value=stated_category_json,
-                    key="reconciliation_category_totals",
-                )
-
-                from decimal import Decimal
-
-                category_totals = json_lib.loads(stated_categories)
-
-                findings = reconcile_budget(
-                    records,
-                    Decimal(stated_total),
-                    {
-                        name: Decimal(str(amount))
-                        for name, amount in category_totals.items()
-                    },
-                )
-
-                st.success("Reconciliation completed.")
-
-                st.dataframe(findings, use_container_width=True)
-
-            except (
-                ValueError,
-                TypeError,
-                ArithmeticError,
-                json_lib.JSONDecodeError,
-            ) as exc:
-                st.error(f"Unable to reconcile budget: {exc}")
-
-
-    # Data quality
-    with quality_tab:
-        st.markdown("#### Data Quality Checks")
-
-        missing_rows = transactions[
-            missing_category_mask
-        ]
-
-        if missing_rows.empty:
-            st.success("No missing categories found.")
-        else:
-            st.warning(
-                f"{len(missing_rows)} transaction(s) have no category."
-            )
-
-            st.dataframe(
-                missing_rows,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.caption(
-                "Missing categories are not automatically filled."
-            )
-
-        st.divider()
-
-        st.markdown("#### Duplicate Detection")
-
-        st.info(
-            "Duplicate detection will be connected to "
-            "modules/duplicate_detection.py."
-        )
-
-
-   
-# AI suggestions
-    with ai_tab:
-     st.markdown("#### AI-Assisted Review")
-
-    if st.session_state.transactions is None:
-        st.info("Load demo data or upload a CSV file to see AI suggestions.")
-    else:
-        try:
-            # Convert the current transaction DataFrame into records.
-            ai_transactions = (
-                st.session_state.transactions
-                .fillna("")
-                .to_dict(orient="records")
-            )
-
-            category_suggestions = suggest_categories(ai_transactions)
-            anomaly_suggestions = suggest_anomalies(ai_transactions)
-
-            st.caption(
-                "AI outputs are suggestions for human review, "
-                "not verified findings."
-            )
-
-            st.markdown("##### Category Suggestions")
-            if category_suggestions:
-                st.dataframe(
-                    pd.DataFrame(category_suggestions),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            else:
-                st.success("No category suggestions to review.")
-
-            st.markdown("##### Unusual Transaction Suggestions")
-            if anomaly_suggestions:
-                st.dataframe(
-                    pd.DataFrame(anomaly_suggestions),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            else:
-                st.success("No unusual transaction suggestions to review.")
-
-        except Exception as exc:
-            st.error(f"Could not generate AI suggestions: {exc}")
-
-
-    # Human review
-    with review_tab:
-        st.markdown("#### Suggestion Review Queue")
-
-        st.info(
-            "Accept and Reject controls will be added when the AI "
-            "suggestion module is connected."
-        )
-
-        st.caption(
-            "Accepted suggestions will affect a working copy only. "
-            "The original uploaded records will remain unchanged."
-        )
-
-    # --------------------------------------------------
-    # SECTION 6: EXPORT
-    # --------------------------------------------------
-
-    st.divider()
-    st.header("6. Export Report")
-
-    try:
-        stated_category_totals = json_lib.loads(
-            stated_category_json
-        )
-=======
-    try:
-        stated_category_totals = json.loads(stated_category_json)
->>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
-
-        if not isinstance(stated_category_totals, dict):
-            raise ValueError("Category totals must be a JSON object.")
-
-        json_error = None
-
-    except (json.JSONDecodeError, ValueError) as error:
         stated_category_totals = {}
-        json_error = str(error)
 
-    if json_error:
-        st.error(f"Invalid category totals JSON: {json_error}")
+        for category, default_amount in DEFAULT_CATEGORY_TOTALS.items():
+            stated_category_totals[category] = st.text_input(
+                f"{category} (₹)",
+                value=default_amount,
+                key=f"category_total_{category}",
+            )
 
-    # ----------------------------------------------
-    # 5. Run analysis modules
-    # ----------------------------------------------
+        with st.expander("Add another category"):
+            extra_category = st.text_input(
+                "Category name",
+                key="extra_category_name",
+            )
+
+            extra_amount = st.text_input(
+                "Declared amount (₹)",
+                value="0.00",
+                key="extra_category_amount",
+            )
+
+            if extra_category.strip():
+                stated_category_totals[
+                    extra_category.strip()
+                ] = extra_amount
+
+    # Validate numeric amounts without parsing JSON.
+    budget_input_error = None
 
     try:
-        if json_error:
-            raise ValueError(json_error)
+        Decimal(stated_grand_total.strip())
+
+        for category, amount in stated_category_totals.items():
+            Decimal(str(amount).strip())
+
+    except (InvalidOperation, ValueError, AttributeError):
+        budget_input_error = (
+            "Enter a valid numeric amount in every budget field."
+        )
+
+    if budget_input_error:
+        st.error(budget_input_error)
+
+    # --------------------------------------------------
+    # 5. RECONCILIATION
+    # --------------------------------------------------
+
+    try:
+        if budget_input_error:
+            raise ValueError(budget_input_error)
 
         verified_findings = reconcile_budget(
             normalized_records,
-            stated_grand_total,
-            stated_category_totals,
+            Decimal(stated_grand_total.strip()),
+            {
+                category: Decimal(str(amount).strip())
+                for category, amount in stated_category_totals.items()
+            },
         )
+
         reconciliation_error = None
 
     except Exception as error:
         verified_findings = []
         reconciliation_error = str(error)
+
+    # --------------------------------------------------
+    # 6. DUPLICATE DETECTION
+    # --------------------------------------------------
 
     try:
         duplicate_findings = detect_duplicates(normalized_records)
@@ -809,6 +566,10 @@ def main():
     except Exception as error:
         duplicate_findings = []
         duplicate_error = str(error)
+
+    # --------------------------------------------------
+    # 7. AI ASSISTANCE
+    # --------------------------------------------------
 
     try:
         category_suggestions = suggest_categories(normalized_records)
@@ -826,29 +587,9 @@ def main():
         ai_anomalies = []
         anomaly_error = str(error)
 
-    # Clear accepted decisions if the suggestion is no longer usable.
-    suggestion_by_id = {
-        str(item.get("transaction_id", "")): item
-        for item in category_suggestions
-        if isinstance(item, dict)
-    }
-
-    for transaction_id, suggestion in suggestion_by_id.items():
-        decision_key = f"category:{transaction_id}"
-
-        proposed = str(
-            suggestion.get("suggested_category") or ""
-        ).strip()
-
-        if (
-            st.session_state.review_decisions.get(decision_key) == "accepted"
-            and not proposed
-        ):
-            st.session_state.review_decisions.pop(decision_key, None)
-
-    # ----------------------------------------------
-    # 6. Findings and review
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 8. FINDINGS AND REVIEW
+    # --------------------------------------------------
 
     st.divider()
     st.header("4. Findings and review")
@@ -865,22 +606,15 @@ def main():
     with verified_tab:
         st.subheader("Rule-based reconciliation")
 
-        show_module_error(
-            "Reconciliation failed",
-            reconciliation_error,
-        )
-
-        if not reconciliation_error:
-            if verified_findings:
-                st.warning(
-                    f"{len(verified_findings)} finding(s) need inspection."
-                )
-                display_findings(
-                    verified_findings,
-                    "No reconciliation findings returned.",
-                )
-            else:
-                st.success("No reconciliation findings returned.")
+        if reconciliation_error:
+            st.error(
+                f"Reconciliation failed: {reconciliation_error}"
+            )
+        else:
+            display_findings(
+                verified_findings,
+                "No reconciliation findings returned.",
+            )
 
         st.caption(
             "A discrepancy is a reason to investigate, "
@@ -890,39 +624,33 @@ def main():
     with quality_tab:
         st.subheader("Validation")
 
-        show_module_error("Validation failed", validation_error)
+        if validation_error:
+            st.error(f"Validation failed: {validation_error}")
 
-        if validation_errors:
-            display_findings(
-                validation_errors,
-                "No validation errors.",
-            )
-        elif not validation_error:
-            st.success("No validation errors reported.")
+        display_findings(
+            validation_errors,
+            "No validation errors reported.",
+        )
 
         if validation_warnings:
             st.markdown("**Warnings**")
             display_findings(
                 validation_warnings,
-                "No warnings.",
+                "No validation warnings.",
             )
 
         st.divider()
         st.subheader("Potential duplicates")
 
-        show_module_error(
-            "Duplicate detection failed",
-            duplicate_error,
-        )
-
-        if not duplicate_error:
-            if duplicate_findings:
-                display_findings(
-                    duplicate_findings,
-                    "No duplicate candidates returned.",
-                )
-            else:
-                st.info("No duplicate candidates returned.")
+        if duplicate_error:
+            st.error(
+                f"Duplicate detection failed: {duplicate_error}"
+            )
+        else:
+            display_findings(
+                duplicate_findings,
+                "No duplicate candidates returned.",
+            )
 
         st.divider()
         st.subheader("Missing categories")
@@ -950,12 +678,11 @@ def main():
     with ai_tab:
         st.subheader("Category suggestions")
 
-        show_module_error(
-            "Category suggestions failed",
-            category_error,
-        )
-
-        if not category_error:
+        if category_error:
+            st.error(
+                f"Category suggestions failed: {category_error}"
+            )
+        else:
             display_findings(
                 category_suggestions,
                 "No category suggestions returned.",
@@ -964,20 +691,19 @@ def main():
         st.divider()
         st.subheader("Potential anomalies")
 
-        show_module_error(
-            "Anomaly analysis failed",
-            anomaly_error,
-        )
-
-        if not anomaly_error:
+        if anomaly_error:
+            st.error(
+                f"Anomaly analysis failed: {anomaly_error}"
+            )
+        else:
             display_findings(
                 ai_anomalies,
                 "No potential anomalies returned.",
             )
 
-        st.caption(
-            "AI-generated suggestions are advisory and require human review."
-        )
+    # --------------------------------------------------
+    # 9. HUMAN REVIEW
+    # --------------------------------------------------
 
     with review_tab:
         st.subheader("Review queue")
@@ -992,6 +718,9 @@ def main():
 
         else:
             for index, suggestion in enumerate(category_suggestions):
+                if not isinstance(suggestion, dict):
+                    continue
+
                 transaction_id = str(
                     suggestion.get("transaction_id", "")
                 )
@@ -1020,26 +749,10 @@ def main():
                 with st.container(border=True):
                     st.markdown(f"**Transaction {transaction_id}**")
                     st.write(f"Description: {description}")
-
                     st.write(
-                        "Suggested category: "
+                        f"Suggested category: "
                         f"**{proposed or 'No reliable suggestion'}**"
                     )
-
-                    confidence = suggestion.get("confidence")
-                    if confidence is not None:
-                        try:
-                            st.caption(
-                                f"Suggestion confidence: "
-                                f"{float(confidence):.0%}"
-                            )
-                        except (TypeError, ValueError):
-                            pass
-
-                    reason = suggestion.get("reason")
-                    if reason:
-                        st.caption(str(reason))
-
                     st.caption(f"Review status: {status.title()}")
 
                     accept_col, reject_col = st.columns(2)
@@ -1048,7 +761,9 @@ def main():
                         if st.button(
                             "Accept suggestion",
                             key=f"accept_{index}_{transaction_id}",
-                            disabled=not proposed or status == "accepted",
+                            disabled=(
+                                not proposed or status == "accepted"
+                            ),
                             use_container_width=True,
                         ):
                             st.session_state.review_decisions[
@@ -1069,30 +784,22 @@ def main():
                             st.rerun()
 
         if st.session_state.review_decisions:
-            st.markdown("**Recorded review decisions**")
-
-            decision_rows = [
-                {
-                    "Transaction": key.removeprefix("category:"),
-                    "Decision": value.title(),
-                }
-                for key, value in st.session_state.review_decisions.items()
-            ]
-
-            st.dataframe(
-                pd.DataFrame(decision_rows),
-                use_container_width=True,
-                hide_index=True,
-            )
-
+            st.markdown("**Recorded decisions**")
+            st.json(st.session_state.review_decisions)
         else:
             st.caption("No review decisions recorded.")
 
-    # ----------------------------------------------
-    # 7. Prepare reviewed copy
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 10. REVIEWED WORKING COPY
+    # --------------------------------------------------
 
     reviewed_records = deepcopy(normalized_records)
+
+    suggestion_by_id = {
+        str(item.get("transaction_id", "")): item
+        for item in category_suggestions
+        if isinstance(item, dict)
+    }
 
     for transaction_id, suggestion in suggestion_by_id.items():
         proposed = str(
@@ -1108,22 +815,18 @@ def main():
         ):
             for row in reviewed_records:
                 if (
-                    str(row.get("transaction_id", "")) == transaction_id
+                    str(row.get("transaction_id", ""))
+                    == transaction_id
                     and not str(row.get("category", "")).strip()
                 ):
                     row["category"] = proposed
 
-    # ----------------------------------------------
-    # 8. Export report
-    # ----------------------------------------------
+    # --------------------------------------------------
+    # 11. EXPORT REPORT
+    # --------------------------------------------------
 
     st.divider()
     st.header("5. Export report")
-
-    st.write(
-        "Download the original data, the reviewed working copy, "
-        "or the complete analysis report."
-    )
 
     module_errors = {
         "validation": validation_error,
@@ -1138,9 +841,6 @@ def main():
         "problem_statement": "VORTEXA 3.0 G-03",
         "input_source": st.session_state.input_source,
         "transaction_count": len(original_df),
-        "recorded_amount_total": str(recorded_total),
-        "valid_amount_count": valid_amount_count,
-        "invalid_amount_count": invalid_amount_count,
         "stated_grand_total": stated_grand_total,
         "stated_category_totals": stated_category_totals,
         "verified_findings": verified_findings,
@@ -1165,54 +865,39 @@ def main():
         ),
     }
 
-    original_csv = original_df.to_csv(index=False).encode("utf-8")
+    csv_col, reviewed_col, json_col = st.columns(3)
 
-    reviewed_df = pd.DataFrame(reviewed_records)
-    reviewed_csv = reviewed_df.to_csv(index=False).encode("utf-8")
-
-    report_json = json.dumps(
-        report,
-        indent=2,
-        ensure_ascii=False,
-        default=str,
-    ).encode("utf-8")
-
-    export1, export2, export3 = st.columns(3)
-
-    with export1:
+    with csv_col:
         st.download_button(
             "Download original CSV",
-            data=original_csv,
-            file_name="budgetclear_original_transactions.csv",
+            data=original_df.to_csv(index=False).encode("utf-8"),
+            file_name="budgetclear_transactions.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-    with export2:
+    with reviewed_col:
         st.download_button(
-<<<<<<< HEAD
-            label="Download Starter JSON Report",
-            data=json_lib.dumps(
-                report,
-                indent=2,
-                ensure_ascii=False,
-            ).encode("utf-8"),
-=======
             "Download reviewed CSV",
-            data=reviewed_csv,
+            data=pd.DataFrame(reviewed_records)
+            .to_csv(index=False)
+            .encode("utf-8"),
             file_name="budgetclear_reviewed_transactions.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-    with export3:
+    with json_col:
         st.download_button(
             "Download analysis JSON",
-            data=report_json,
->>>>>>> a2c6dc23320f3fb52ff5be0daf200e60655d34e5
+            data=json.dumps(
+                report,
+                indent=2,
+                ensure_ascii=False,
+                default=str,
+            ).encode("utf-8"),
             file_name="budgetclear_report.json",
             mime="application/json",
-            disabled=json_error is not None,
             use_container_width=True,
         )
 
