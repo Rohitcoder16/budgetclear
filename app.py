@@ -1,8 +1,11 @@
-
-import json
+from modules.reconciliation import reconcile_budget
+from modules.ai_assist import suggest_categories, suggest_anomalies
+import json as json_lib
 
 import pandas as pd
 import streamlit as st
+
+
 
 
 # --------------------------------------------------
@@ -313,7 +316,7 @@ def main():
     with categories_column:
         stated_category_json = st.text_area(
             "Stated Category Totals (JSON)",
-            value=json.dumps(
+            value=json_lib.dumps(
                 {
                     "Office Supplies": "2500.00",
                     "IT Equipment": "21500.00",
@@ -332,27 +335,61 @@ def main():
     st.header("5. Findings and Review")
 
     verified_tab, quality_tab, ai_tab, review_tab = st.tabs(
-        [
-            "Verified Findings",
-            "Data Quality & Duplicates",
-            "AI Suggestions",
-            "Human Review",
-        ]
-    )
-
+    [
+        "Verified Findings",
+        "Data Quality & Duplicates",
+        "AI Suggestions",
+        "Human Review",
+    ]
+)
     # Verified reconciliation results
     with verified_tab:
         st.markdown("#### Rule-Based Reconciliation")
 
-        st.warning(
-            "The reconciliation module has not been connected yet. "
-            "No verified total or discrepancy is being reported."
-        )
+        if transactions is None or transactions.empty:
+            st.info("Load transaction data to calculate reconciliation results.")
+        else:
+            try:
+                records = transactions.to_dict(orient="records")
 
-        st.caption(
-            "This section will show exact differences, finding types, "
-            "severity, and supporting transaction IDs."
-        )
+                # Decimal conversion from text avoids float-based money arithmetic.
+                stated_total = st.text_input(
+                    "Stated Grand Total (₹)",
+                    value=str(stated_grand_total),
+                    key="reconciliation_grand_total",
+                )
+
+                stated_categories = st.text_area(
+                    "Stated Category Totals (JSON)",
+                    value=stated_category_json,
+                    key="reconciliation_category_totals",
+                )
+
+                from decimal import Decimal
+
+                category_totals = json_lib.loads(stated_categories)
+
+                findings = reconcile_budget(
+                    records,
+                    Decimal(stated_total),
+                    {
+                        name: Decimal(str(amount))
+                        for name, amount in category_totals.items()
+                    },
+                )
+
+                st.success("Reconciliation completed.")
+
+                st.dataframe(findings, use_container_width=True)
+
+            except (
+                ValueError,
+                TypeError,
+                ArithmeticError,
+                json_lib.JSONDecodeError,
+            ) as exc:
+                st.error(f"Unable to reconcile budget: {exc}")
+
 
     # Data quality
     with quality_tab:
@@ -388,18 +425,54 @@ def main():
             "modules/duplicate_detection.py."
         )
 
-    # AI suggestions
+
+   
+# AI suggestions
     with ai_tab:
-        st.markdown("#### AI-Assisted Review")
+     st.markdown("#### AI-Assisted Review")
 
-        st.info(
-            "Category suggestions and unusual-entry flags will appear "
-            "here after modules/ai_assist.py is integrated."
-        )
+    if st.session_state.transactions is None:
+        st.info("Load demo data or upload a CSV file to see AI suggestions.")
+    else:
+        try:
+            # Convert the current transaction DataFrame into records.
+            ai_transactions = (
+                st.session_state.transactions
+                .fillna("")
+                .to_dict(orient="records")
+            )
 
-        st.caption(
-            "AI suggestions will remain separate from verified findings."
-        )
+            category_suggestions = suggest_categories(ai_transactions)
+            anomaly_suggestions = suggest_anomalies(ai_transactions)
+
+            st.caption(
+                "AI outputs are suggestions for human review, "
+                "not verified findings."
+            )
+
+            st.markdown("##### Category Suggestions")
+            if category_suggestions:
+                st.dataframe(
+                    pd.DataFrame(category_suggestions),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.success("No category suggestions to review.")
+
+            st.markdown("##### Unusual Transaction Suggestions")
+            if anomaly_suggestions:
+                st.dataframe(
+                    pd.DataFrame(anomaly_suggestions),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.success("No unusual transaction suggestions to review.")
+
+        except Exception as exc:
+            st.error(f"Could not generate AI suggestions: {exc}")
+
 
     # Human review
     with review_tab:
@@ -423,7 +496,7 @@ def main():
     st.header("6. Export Report")
 
     try:
-        stated_category_totals = json.loads(
+        stated_category_totals = json_lib.loads(
             stated_category_json
         )
 
@@ -478,7 +551,7 @@ def main():
     with export_column2:
         st.download_button(
             label="Download Starter JSON Report",
-            data=json.dumps(
+            data=json_lib.dumps(
                 report,
                 indent=2,
                 ensure_ascii=False,
